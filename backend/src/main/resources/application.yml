@@ -29,7 +29,7 @@ spring:
       data-locations: classpath:data.sql
 
 server:
-  port: 8081
+  port: ${PORT:8080}
   servlet:
     context-path: /
 
