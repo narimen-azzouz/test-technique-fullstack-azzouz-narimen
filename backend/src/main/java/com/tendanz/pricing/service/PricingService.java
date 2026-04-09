@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -54,9 +55,9 @@ public class PricingService {
 
         String normalizedZoneCode = request.getZoneCode() == null ? null : request.getZoneCode().trim().toUpperCase();
         Zone zone = zoneRepository.findByCode(normalizedZoneCode)
-                .orElseThrow(() -> new IllegalArgumentException("Zone not found with code: " + request.getZoneCode()));
+            .orElseThrow(() -> new IllegalArgumentException("Zone not found with code: " + normalizedZoneCode));
 
-        PricingRule pricingRule = pricingRuleRepository.findByProductId(product.getId())
+        PricingRule pricingRule = pricingRuleRepository.findByProduct_Id(product.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Pricing rule not found for product ID: " + product.getId()));
 
         AgeCategory ageCategory = AgeCategory.fromAge(request.getClientAge());
@@ -71,9 +72,9 @@ public class PricingService {
                 .setScale(2, RoundingMode.HALF_UP);
 
         List<String> appliedRules = new ArrayList<>();
-        appliedRules.add("Base rate: " + baseRate);
-        appliedRules.add("Age category: " + ageCategory + " (factor: " + ageFactor + ")");
-        appliedRules.add("Zone: " + zone.getCode() + " (risk coefficient: " + zoneRiskCoefficient + ")");
+        appliedRules.add("Base rate: " + baseRate.setScale(2, RoundingMode.HALF_UP));
+        appliedRules.add("Age category: " + ageCategory + " (factor " + ageFactor + ")");
+        appliedRules.add("Zone: " + zone.getCode() + " (risk coefficient " + zoneRiskCoefficient + ")");
         appliedRules.add("Final price = baseRate x ageFactor x zoneRiskCoefficient = " + finalPrice);
 
         Quote quote = Quote.builder()
@@ -81,7 +82,7 @@ public class PricingService {
                 .zone(zone)
                 .clientName(request.getClientName() == null ? null : request.getClientName().trim())
                 .clientAge(request.getClientAge())
-                .basePrice(baseRate)
+                .basePrice(baseRate.setScale(2, RoundingMode.HALF_UP))
                 .finalPrice(finalPrice)
                 .appliedRules(convertRulesToJson(appliedRules))
                 .build();
@@ -92,34 +93,24 @@ public class PricingService {
         return mapToResponse(saved, appliedRules);
     }
 
-    /**
-     * List quotes with optional filters.
-     *
-     * @param productId optional product filter
-     * @param minPrice optional minimum final price filter
-     * @return list of quote responses
-     */
     @Transactional(readOnly = true)
     public List<QuoteResponse> getQuotes(Long productId, Double minPrice) {
-        BigDecimal minPriceDecimal = minPrice == null ? null : BigDecimal.valueOf(minPrice);
+        BigDecimal minFinalPrice = minPrice == null ? null : BigDecimal.valueOf(minPrice);
 
         List<Quote> quotes;
-        if (productId != null && minPriceDecimal != null) {
-            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, minPriceDecimal);
+        if (productId != null && minFinalPrice != null) {
+            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, minFinalPrice);
         } else if (productId != null) {
             quotes = quoteRepository.findByProduct_Id(productId);
-        } else if (minPriceDecimal != null) {
-            quotes = quoteRepository.findWithFinalPriceAbove(minPriceDecimal);
+        } else if (minFinalPrice != null) {
+            quotes = quoteRepository.findByFinalPriceGreaterThanEqual(minFinalPrice);
         } else {
             quotes = quoteRepository.findAll();
         }
 
-        List<QuoteResponse> responses = new ArrayList<>(quotes.size());
-        for (Quote quote : quotes) {
-            List<String> appliedRules = deserializeRules(quote.getAppliedRules());
-            responses.add(mapToResponse(quote, appliedRules));
-        }
-        return responses;
+        return quotes.stream()
+                .map(q -> mapToResponse(q, deserializeRules(q.getAppliedRules())))
+                .collect(Collectors.toList());
     }
 
     /**
