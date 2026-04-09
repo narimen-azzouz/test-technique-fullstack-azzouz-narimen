@@ -17,5 +17,5 @@ public interface PricingRuleRepository extends JpaRepository<PricingRule, Long> 
      * @param productId the product ID
      * @return an Optional containing the pricing rule if found
      */
-    Optional<PricingRule> findByProductId(Long productId);
+    Optional<PricingRule> findByProduct_Id(Long productId);
 }

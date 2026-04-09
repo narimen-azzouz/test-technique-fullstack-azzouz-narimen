@@ -56,8 +56,44 @@ public class PricingService {
      */
     @Transactional
     public QuoteResponse calculateQuote(QuoteRequest request) {
-        // TODO: Implement this method
-        throw new UnsupportedOperationException("TODO: Implement calculateQuote");
+        Product product = productRepository.findById(request.getProductId())
+            .orElseThrow(() -> new IllegalArgumentException("Product not found with ID: " + request.getProductId()));
+
+        Zone zone = zoneRepository.findByCode(request.getZoneCode())
+            .orElseThrow(() -> new IllegalArgumentException("Zone not found with code: " + request.getZoneCode()));
+
+        PricingRule pricingRule = pricingRuleRepository.findByProduct_Id(product.getId())
+            .orElseThrow(() -> new IllegalArgumentException("Pricing rule not found for product ID: " + product.getId()));
+
+        AgeCategory ageCategory = AgeCategory.fromAge(request.getClientAge());
+        BigDecimal ageFactor = getAgeFactor(pricingRule, ageCategory);
+        BigDecimal baseRate = pricingRule.getBaseRate();
+        BigDecimal zoneRiskCoefficient = zone.getRiskCoefficient();
+
+        BigDecimal finalPrice = baseRate
+            .multiply(ageFactor)
+            .multiply(zoneRiskCoefficient)
+            .setScale(2, RoundingMode.HALF_UP);
+
+        List<String> appliedRules = new ArrayList<>();
+        appliedRules.add("Base rate: " + baseRate);
+        appliedRules.add("Age category: " + ageCategory + " (ageFactor=" + ageFactor + ")");
+        appliedRules.add("Zone risk coefficient: " + zoneRiskCoefficient);
+        appliedRules.add("Final price = baseRate × ageFactor × zoneRiskCoefficient");
+        appliedRules.add("Final price (rounded) = " + finalPrice);
+
+        Quote quote = Quote.builder()
+            .product(product)
+            .zone(zone)
+            .clientName(request.getClientName())
+            .clientAge(request.getClientAge())
+            .basePrice(baseRate)
+            .finalPrice(finalPrice)
+            .appliedRules(convertRulesToJson(appliedRules))
+            .build();
+
+        Quote saved = quoteRepository.save(quote);
+        return mapToResponse(saved, appliedRules);
     }
 
     /**
@@ -123,12 +159,39 @@ public class PricingService {
      * @return the quote response
      * @throws IllegalArgumentException if quote not found
      */
+    @Transactional(readOnly = true)
     public QuoteResponse getQuote(Long id) {
         Quote quote = quoteRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Quote not found with ID: " + id));
 
         List<String> appliedRules = deserializeRules(quote.getAppliedRules());
         return mapToResponse(quote, appliedRules);
+    }
+
+    /**
+     * Get quotes with optional filtering.
+     *
+     * @param productId optional product filter
+     * @param minPrice optional minimum final price filter
+     * @return list of QuoteResponse
+     */
+    @Transactional(readOnly = true)
+    public List<QuoteResponse> getQuotes(Long productId, Double minPrice) {
+        List<Quote> quotes;
+
+        if (productId != null && minPrice != null) {
+            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, BigDecimal.valueOf(minPrice));
+        } else if (productId != null) {
+            quotes = quoteRepository.findByProduct_Id(productId);
+        } else if (minPrice != null) {
+            quotes = quoteRepository.findByFinalPriceGreaterThanEqual(BigDecimal.valueOf(minPrice));
+        } else {
+            quotes = quoteRepository.findAll();
+        }
+
+        return quotes.stream()
+                .map(q -> mapToResponse(q, deserializeRules(q.getAppliedRules())))
+                .toList();
     }
 
     /**
