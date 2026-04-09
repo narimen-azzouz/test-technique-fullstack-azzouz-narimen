@@ -29,7 +29,6 @@ public class QuoteController {
     public ResponseEntity<QuoteResponse> createQuote(@Valid @RequestBody QuoteRequest request) {
         log.info("Creating quote for productId={}, zoneCode={}, clientName={}, clientAge={}",
                 request.getProductId(), request.getZoneCode(), request.getClientName(), request.getClientAge());
-
         QuoteResponse response = pricingService.calculateQuote(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -54,7 +53,6 @@ public class QuoteController {
             @RequestParam(required = false) Long productId,
             @RequestParam(required = false) Double minPrice) {
         log.info("Fetching quotes with filters productId={}, minPrice={}", productId, minPrice);
-        List<QuoteResponse> quotes = pricingService.getQuotes(productId, minPrice);
-        return ResponseEntity.ok(quotes);
+        return ResponseEntity.ok(pricingService.getQuotes(productId, minPrice));
     }
 }

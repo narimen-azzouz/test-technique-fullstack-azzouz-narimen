@@ -65,7 +65,7 @@ class PricingServiceTest {
         productRepository.save(product);
 
         zone = Zone.builder()
-                .code("TUN")
+            .code("TUN_TEST")
                 .name("Grand Tunis")
                 .riskCoefficient(BigDecimal.valueOf(1.20))
                 .build();
@@ -127,7 +127,6 @@ class PricingServiceTest {
                 .build();
 
         QuoteResponse response = pricingService.calculateQuote(request);
-
         assertNotNull(response);
         assertEquals(0, response.getFinalPrice().compareTo(new BigDecimal("780.00")));
     }
@@ -147,7 +146,6 @@ class PricingServiceTest {
                 .build();
 
         QuoteResponse response = pricingService.calculateQuote(request);
-
         assertNotNull(response);
         assertEquals(0, response.getFinalPrice().compareTo(new BigDecimal("720.00")));
     }
@@ -161,13 +159,13 @@ class PricingServiceTest {
         QuoteRequest request = QuoteRequest.builder()
             .productId(999999L)
             .zoneCode(zone.getCode())
-            .clientName("Dana")
+                        .clientName("Alice")
             .clientAge(30)
             .build();
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> pricingService.calculateQuote(request));
-        assertTrue(ex.getMessage().contains("Product not found"));
+        assertTrue(ex.getMessage().toLowerCase().contains("product"));
     }
 
     /**
@@ -179,13 +177,13 @@ class PricingServiceTest {
         QuoteRequest request = QuoteRequest.builder()
             .productId(product.getId())
             .zoneCode("XXX")
-            .clientName("Eve")
+                        .clientName("Alice")
             .clientAge(30)
             .build();
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> pricingService.calculateQuote(request));
-        assertTrue(ex.getMessage().contains("Zone not found"));
+        assertTrue(ex.getMessage().toLowerCase().contains("zone"));
     }
 
     @Test

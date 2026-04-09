@@ -14,14 +14,12 @@ import java.util.List;
  */
 @Repository
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
-
-    List<Quote> findByClientName(String clientName);
+    List<Quote> findByClientNameIgnoreCase(String clientName);
 
     List<Quote> findByProduct_Id(Long productId);
 
-    List<Quote> findByProduct_IdAndFinalPriceGreaterThanEqual(Long productId, BigDecimal minFinalPrice);
+    List<Quote> findByFinalPriceGreaterThanEqual(BigDecimal minFinalPrice);
 
-    @Query("select q from Quote q where q.finalPrice >= :minPrice")
-    List<Quote> findWithFinalPriceAbove(@Param("minPrice") BigDecimal minPrice);
+    List<Quote> findByProduct_IdAndFinalPriceGreaterThanEqual(Long productId, BigDecimal minFinalPrice);
 
 }
