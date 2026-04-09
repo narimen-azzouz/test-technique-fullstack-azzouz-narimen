@@ -19,7 +19,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -62,7 +61,6 @@ public class PricingService {
 
         AgeCategory ageCategory = AgeCategory.fromAge(request.getClientAge());
         BigDecimal ageFactor = getAgeFactor(pricingRule, ageCategory);
-
         BigDecimal baseRate = pricingRule.getBaseRate();
         BigDecimal zoneRiskCoefficient = zone.getRiskCoefficient();
 
@@ -91,26 +89,6 @@ public class PricingService {
         log.info("Created quote id={} for productId={} zoneCode={}", saved.getId(), product.getId(), zone.getCode());
 
         return mapToResponse(saved, appliedRules);
-    }
-
-    @Transactional(readOnly = true)
-    public List<QuoteResponse> getQuotes(Long productId, Double minPrice) {
-        BigDecimal minFinalPrice = minPrice == null ? null : BigDecimal.valueOf(minPrice);
-
-        List<Quote> quotes;
-        if (productId != null && minFinalPrice != null) {
-            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, minFinalPrice);
-        } else if (productId != null) {
-            quotes = quoteRepository.findByProduct_Id(productId);
-        } else if (minFinalPrice != null) {
-            quotes = quoteRepository.findByFinalPriceGreaterThanEqual(minFinalPrice);
-        } else {
-            quotes = quoteRepository.findAll();
-        }
-
-        return quotes.stream()
-                .map(q -> mapToResponse(q, deserializeRules(q.getAppliedRules())))
-                .collect(Collectors.toList());
     }
 
     /**
@@ -176,12 +154,39 @@ public class PricingService {
      * @return the quote response
      * @throws IllegalArgumentException if quote not found
      */
+    @Transactional(readOnly = true)
     public QuoteResponse getQuote(Long id) {
         Quote quote = quoteRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Quote not found with ID: " + id));
 
         List<String> appliedRules = deserializeRules(quote.getAppliedRules());
         return mapToResponse(quote, appliedRules);
+    }
+
+    /**
+     * Get quotes with optional filtering.
+     *
+     * @param productId optional product filter
+     * @param minPrice optional minimum final price filter
+     * @return list of QuoteResponse
+     */
+    @Transactional(readOnly = true)
+    public List<QuoteResponse> getQuotes(Long productId, Double minPrice) {
+        List<Quote> quotes;
+
+        if (productId != null && minPrice != null) {
+            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, BigDecimal.valueOf(minPrice));
+        } else if (productId != null) {
+            quotes = quoteRepository.findByProduct_Id(productId);
+        } else if (minPrice != null) {
+            quotes = quoteRepository.findByFinalPriceGreaterThanEqual(BigDecimal.valueOf(minPrice));
+        } else {
+            quotes = quoteRepository.findAll();
+        }
+
+        return quotes.stream()
+                .map(q -> mapToResponse(q, deserializeRules(q.getAppliedRules())))
+                .toList();
     }
 
     /**

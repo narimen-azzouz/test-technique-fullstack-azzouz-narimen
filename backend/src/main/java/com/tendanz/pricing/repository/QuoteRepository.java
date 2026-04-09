@@ -15,7 +15,6 @@ import java.util.List;
 @Repository
 public interface QuoteRepository extends JpaRepository<Quote, Long> {
     List<Quote> findByClientNameIgnoreCase(String clientName);
-
     List<Quote> findByProduct_Id(Long productId);
 
     List<Quote> findByFinalPriceGreaterThanEqual(BigDecimal minFinalPrice);
