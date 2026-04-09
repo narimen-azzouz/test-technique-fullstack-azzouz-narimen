@@ -90,12 +90,10 @@ Prix Final = Taux de Base × Facteur Âge × Coefficient Zone
 - README mis à jour avec vos choix techniques
 - Commits Git progressifs et clairs
 
-<<<<<<< HEAD
-Bonne chance !
-=======
 ### Deadline
 
 **Samedi 11 avril 2026 à 23h59**
 
 Envoyez le lien de votre repository à : **recrutement.tn@tendanz.com**
->>>>>>> df8eb3a (Fix skeleton: corrected data.sql, real TODOs, frontend models, added ProductController)
+
+Bonne chance !
