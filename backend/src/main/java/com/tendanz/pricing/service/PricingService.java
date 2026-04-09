@@ -39,25 +39,87 @@ public class PricingService {
     /**
      * Calculate a quote based on the provided request.
      *
-     * TODO: Implement the calculateQuote method with the following logic:
-     * 1. Validate and load the Product from productRepository (throw IllegalArgumentException if not found)
-     * 2. Validate and load the Zone from zoneRepository by code (throw IllegalArgumentException if not found)
-     * 3. Load the PricingRule for the product from pricingRuleRepository
-     * 4. Determine the age category using AgeCategory.fromAge(clientAge)
-     * 5. Get the appropriate age factor using getAgeFactor() helper below
-     * 6. Calculate: finalPrice = baseRate × ageFactor × zoneRiskCoefficient (rounded to 2 decimals)
-     * 7. Build an appliedRules list describing each step of the calculation
-     * 8. Create and save a Quote entity with all calculated values
-     * 9. Return a QuoteResponse using the mapToResponse() helper below
-     *
      * @param request the quote request containing productId, zoneCode, clientName, clientAge
      * @return the calculated quote response
      * @throws IllegalArgumentException if product, zone, or pricing rule not found
      */
     @Transactional
     public QuoteResponse calculateQuote(QuoteRequest request) {
-        // TODO: Implement this method
-        throw new UnsupportedOperationException("TODO: Implement calculateQuote");
+        if (request == null) {
+            throw new IllegalArgumentException("Request cannot be null");
+        }
+
+        Product product = productRepository.findById(request.getProductId())
+                .orElseThrow(() -> new IllegalArgumentException("Product not found with ID: " + request.getProductId()));
+
+        String normalizedZoneCode = request.getZoneCode() == null ? null : request.getZoneCode().trim().toUpperCase();
+        Zone zone = zoneRepository.findByCode(normalizedZoneCode)
+                .orElseThrow(() -> new IllegalArgumentException("Zone not found with code: " + request.getZoneCode()));
+
+        PricingRule pricingRule = pricingRuleRepository.findByProductId(product.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Pricing rule not found for product ID: " + product.getId()));
+
+        AgeCategory ageCategory = AgeCategory.fromAge(request.getClientAge());
+        BigDecimal ageFactor = getAgeFactor(pricingRule, ageCategory);
+
+        BigDecimal baseRate = pricingRule.getBaseRate();
+        BigDecimal zoneRiskCoefficient = zone.getRiskCoefficient();
+
+        BigDecimal finalPrice = baseRate
+                .multiply(ageFactor)
+                .multiply(zoneRiskCoefficient)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        List<String> appliedRules = new ArrayList<>();
+        appliedRules.add("Base rate: " + baseRate);
+        appliedRules.add("Age category: " + ageCategory + " (factor: " + ageFactor + ")");
+        appliedRules.add("Zone: " + zone.getCode() + " (risk coefficient: " + zoneRiskCoefficient + ")");
+        appliedRules.add("Final price = baseRate x ageFactor x zoneRiskCoefficient = " + finalPrice);
+
+        Quote quote = Quote.builder()
+                .product(product)
+                .zone(zone)
+                .clientName(request.getClientName() == null ? null : request.getClientName().trim())
+                .clientAge(request.getClientAge())
+                .basePrice(baseRate)
+                .finalPrice(finalPrice)
+                .appliedRules(convertRulesToJson(appliedRules))
+                .build();
+
+        Quote saved = quoteRepository.save(quote);
+        log.info("Created quote id={} for productId={} zoneCode={}", saved.getId(), product.getId(), zone.getCode());
+
+        return mapToResponse(saved, appliedRules);
+    }
+
+    /**
+     * List quotes with optional filters.
+     *
+     * @param productId optional product filter
+     * @param minPrice optional minimum final price filter
+     * @return list of quote responses
+     */
+    @Transactional(readOnly = true)
+    public List<QuoteResponse> getQuotes(Long productId, Double minPrice) {
+        BigDecimal minPriceDecimal = minPrice == null ? null : BigDecimal.valueOf(minPrice);
+
+        List<Quote> quotes;
+        if (productId != null && minPriceDecimal != null) {
+            quotes = quoteRepository.findByProduct_IdAndFinalPriceGreaterThanEqual(productId, minPriceDecimal);
+        } else if (productId != null) {
+            quotes = quoteRepository.findByProduct_Id(productId);
+        } else if (minPriceDecimal != null) {
+            quotes = quoteRepository.findWithFinalPriceAbove(minPriceDecimal);
+        } else {
+            quotes = quoteRepository.findAll();
+        }
+
+        List<QuoteResponse> responses = new ArrayList<>(quotes.size());
+        for (Quote quote : quotes) {
+            List<String> appliedRules = deserializeRules(quote.getAppliedRules());
+            responses.add(mapToResponse(quote, appliedRules));
+        }
+        return responses;
     }
 
     /**

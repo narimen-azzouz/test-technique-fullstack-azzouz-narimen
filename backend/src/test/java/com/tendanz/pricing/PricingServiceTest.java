@@ -25,16 +25,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Test class for PricingService.
- *
- * TODO: Implement at least 5 test cases covering:
- * - Quote calculation for different age categories (YOUNG, ADULT, SENIOR, ELDERLY)
- * - Different zone risk coefficients
- * - Edge cases (minimum age 18, maximum age 99, boundary between categories)
- * - Error handling (invalid product ID, invalid zone code)
- * - Quote retrieval by ID
- *
- * The @BeforeEach setUp() method below creates test data you can use.
- * Add your test methods below the existing structure.
  */
 @DataJpaTest
 @Import({PricingService.class, ObjectMapper.class})
@@ -61,6 +51,11 @@ class PricingServiceTest {
 
     @BeforeEach
     void setUp() {
+        quoteRepository.deleteAllInBatch();
+        pricingRuleRepository.deleteAllInBatch();
+        zoneRepository.deleteAllInBatch();
+        productRepository.deleteAllInBatch();
+
         // Test data: Auto Insurance, zone coefficient 1.20, standard age factors
         product = Product.builder()
                 .name("Test Auto Insurance")
@@ -95,10 +90,26 @@ class PricingServiceTest {
      */
     @Test
     void testCalculateQuoteForAdult() {
-        // TODO: Implement this test
-        // Hint: Use QuoteRequest.builder() to create the request
-        // Then call pricingService.calculateQuote(request)
-        // Assert: finalPrice == 600.00, basePrice == 500.00, etc.
+        QuoteRequest request = QuoteRequest.builder()
+                .productId(product.getId())
+                .zoneCode(zone.getCode())
+                .clientName("Alice")
+                .clientAge(30)
+                .build();
+
+        QuoteResponse response = pricingService.calculateQuote(request);
+
+        assertNotNull(response);
+        assertNotNull(response.getQuoteId());
+        assertEquals("Test Auto Insurance", response.getProductName());
+        assertEquals("Grand Tunis", response.getZoneName());
+        assertEquals("Alice", response.getClientName());
+        assertEquals(30, response.getClientAge());
+        assertEquals(0, response.getBasePrice().compareTo(new BigDecimal("500.00")));
+        assertEquals(0, response.getFinalPrice().compareTo(new BigDecimal("600.00")));
+        assertNotNull(response.getCreatedAt());
+        assertNotNull(response.getAppliedRules());
+        assertFalse(response.getAppliedRules().isEmpty());
     }
 
     /**
@@ -108,7 +119,17 @@ class PricingServiceTest {
      */
     @Test
     void testCalculateQuoteForYoungClient() {
-        // TODO: Implement this test
+        QuoteRequest request = QuoteRequest.builder()
+                .productId(product.getId())
+                .zoneCode(zone.getCode())
+                .clientName("Bob")
+                .clientAge(20)
+                .build();
+
+        QuoteResponse response = pricingService.calculateQuote(request);
+
+        assertNotNull(response);
+        assertEquals(0, response.getFinalPrice().compareTo(new BigDecimal("780.00")));
     }
 
     /**
@@ -118,7 +139,17 @@ class PricingServiceTest {
      */
     @Test
     void testCalculateQuoteForSeniorClient() {
-        // TODO: Implement this test
+        QuoteRequest request = QuoteRequest.builder()
+                .productId(product.getId())
+                .zoneCode(zone.getCode())
+                .clientName("Charlie")
+                .clientAge(50)
+                .build();
+
+        QuoteResponse response = pricingService.calculateQuote(request);
+
+        assertNotNull(response);
+        assertEquals(0, response.getFinalPrice().compareTo(new BigDecimal("720.00")));
     }
 
     /**
@@ -127,8 +158,16 @@ class PricingServiceTest {
      */
     @Test
     void testCalculateQuoteWithInvalidProductId() {
-        // TODO: Implement this test
-        // Hint: Use assertThrows(IllegalArgumentException.class, () -> ...)
+        QuoteRequest request = QuoteRequest.builder()
+            .productId(999999L)
+            .zoneCode(zone.getCode())
+            .clientName("Dana")
+            .clientAge(30)
+            .build();
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> pricingService.calculateQuote(request));
+        assertTrue(ex.getMessage().contains("Product not found"));
     }
 
     /**
@@ -137,19 +176,38 @@ class PricingServiceTest {
      */
     @Test
     void testCalculateQuoteWithInvalidZoneCode() {
-        // TODO: Implement this test
+        QuoteRequest request = QuoteRequest.builder()
+            .productId(product.getId())
+            .zoneCode("XXX")
+            .clientName("Eve")
+            .clientAge(30)
+            .build();
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+            () -> pricingService.calculateQuote(request));
+        assertTrue(ex.getMessage().contains("Zone not found"));
     }
 
-    /**
-     * TODO: (Bonus) Test quote retrieval by ID.
-     * Create a quote, then retrieve it with pricingService.getQuote(id).
-     * Verify all fields match.
-     */
+    @Test
+    void testGetQuoteById() {
+        QuoteRequest request = QuoteRequest.builder()
+            .productId(product.getId())
+            .zoneCode(zone.getCode())
+            .clientName("Frank")
+            .clientAge(25)
+            .build();
 
-    /**
-     * TODO: (Bonus) Test edge cases: age boundaries.
-     * - Age 24 should be YOUNG, age 25 should be ADULT
-     * - Age 45 should be ADULT, age 46 should be SENIOR
-     * - Age 65 should be SENIOR, age 66 should be ELDERLY
-     */
+        QuoteResponse created = pricingService.calculateQuote(request);
+        QuoteResponse fetched = pricingService.getQuote(created.getQuoteId());
+
+        assertNotNull(fetched);
+        assertEquals(created.getQuoteId(), fetched.getQuoteId());
+        assertEquals(created.getProductName(), fetched.getProductName());
+        assertEquals(created.getZoneName(), fetched.getZoneName());
+        assertEquals(created.getClientName(), fetched.getClientName());
+        assertEquals(created.getClientAge(), fetched.getClientAge());
+        assertEquals(0, created.getFinalPrice().compareTo(fetched.getFinalPrice()));
+        assertNotNull(fetched.getAppliedRules());
+        assertFalse(fetched.getAppliedRules().isEmpty());
+    }
 }
