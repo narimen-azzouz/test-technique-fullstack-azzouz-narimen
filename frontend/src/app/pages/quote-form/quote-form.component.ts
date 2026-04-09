@@ -17,18 +17,6 @@ const ZONES = [
 
 /**
  * Component for creating a new quote
- *
- * TODO: Candidate must implement the following:
- * 1. Load products from ProductService on init and populate the product dropdown
- *
- * 2. Implement form submission in onSubmit():
- *    - Validate form before submission
- *    - Build a QuoteRequest from form values
- *    - Call QuoteService.createQuote()
- *    - Show success/error message
- *    - Navigate to quote detail page on success
- *
- * 3. Handle loading state while API request is in progress
  */
 @Component({
   selector: 'app-quote-form',
@@ -61,27 +49,52 @@ export class QuoteFormComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    // TODO: Load products from ProductService
-    // TODO: Populate this.products array
-    // TODO: Handle loading and error states
+    this.loading = true;
+    this.errorMessage = null;
+    this.productService.getProducts().subscribe({
+      next: (products) => {
+        this.products = products;
+        this.loading = false;
+      },
+      error: (err: Error) => {
+        this.errorMessage = err.message || 'Failed to load products';
+        this.loading = false;
+      }
+    });
   }
 
   /**
    * Submit the form
-   *
-   * TODO: Implement form submission
-   * - Check if form is valid (mark all fields as touched if invalid)
-   * - Set loading state
-   * - Build QuoteRequest: { productId: number, zoneCode: string, clientName: string, clientAge: number }
-   * - Call quoteService.createQuote(request)
-   * - On success: show message, navigate to /quotes/{quoteId}
-   * - On error: show error message
-   * - Always reset loading state
    */
   onSubmit(): void {
     this.submitted = true;
-    // TODO: Implement form submission
-    console.log('Form submitted (TODO: implement)');
+
+    this.errorMessage = null;
+    this.successMessage = null;
+
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    const request = {
+      clientName: String(this.form.value.clientName).trim(),
+      productId: Number(this.form.value.productId),
+      zoneCode: String(this.form.value.zoneCode),
+      clientAge: Number(this.form.value.clientAge)
+    };
+
+    this.loading = true;
+    this.quoteService.createQuote(request).subscribe({
+      next: (createdQuote) => {
+        this.loading = false;
+        this.router.navigate(['/quotes', createdQuote.quoteId]);
+      },
+      error: (err: Error) => {
+        this.loading = false;
+        this.errorMessage = err.message || 'Failed to create quote';
+      }
+    });
   }
 
   /**
